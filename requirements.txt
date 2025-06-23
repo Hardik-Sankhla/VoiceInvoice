@@ -1,0 +1,11 @@
+transformers
+torch
+librosa
+fastapi
+uvicorn
+python-multipart
+reportlab
+pydantic>=2.0 # Ensure Pydantic V2 for model_post_init
+accelerate
+minio>=7.0.0 # For S3-compatible storage with MinIO
+python-dotenv # Recommended for managing environment variables locally

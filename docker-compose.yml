@@ -1,0 +1,52 @@
+# docker-compose.yml
+
+version: '3.8'
+
+services:
+  # FastAPI Backend Service
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000" # Map host port 8000 to container port 8000
+    environment:
+      # Environment variables for the FastAPI application
+      # These must match the variables used in backend/config.py
+      MINIO_ENDPOINT: minio:9000 # MinIO service name as defined below and its internal port
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_SECURE: "False" # Set to "True" if using HTTPS for MinIO (e.g., with a reverse proxy)
+      MINIO_AUDIO_BUCKET: audio-inputs
+      MINIO_PDF_BUCKET: generated-invoices
+      # Set environment for model loading (e.g., development, production)
+      # ENVIRONMENT: "production" # Uncomment for production specific settings
+    depends_on:
+      minio:
+        condition: service_healthy # <--- IMPORTANT CHANGE: Wait for MinIO healthcheck to pass
+    volumes:
+      # Optional: Mount a local volume for debugging or persistent model storage
+      # - ./models:/app/models # If you want to pre-download models to a local dir
+      - ./logs:/app/logs # For application logs if you implement logging to files
+
+  # MinIO S3-Compatible Storage Service
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000" # MinIO API port
+      - "9001:9001" # MinIO Console port (optional, useful for browser UI)
+    environment:
+      MINIO_ROOT_USER: minioadmin # Matches MINIO_ACCESS_KEY in backend config
+      MINIO_ROOT_PASSWORD: minioadmin # Matches MINIO_SECRET_KEY in backend config
+    command: server /data --console-address ":9001" # Start MinIO server and console
+    volumes:
+      - minio_data:/data # Persistent volume for MinIO data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s       # Check every 10 seconds
+      timeout: 5s         # Timeout after 5 seconds
+      retries: 5          # Retry 5 times before marking as unhealthy
+      start_period: 30s   # Give MinIO 30 seconds to start up before checks begin
+    
+volumes:
+  minio_data: # Define the named volume for MinIO data persistence
