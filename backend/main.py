@@ -10,7 +10,8 @@ from io import BytesIO
 
 from backend.models import InvoiceData
 from backend.config import MINIO_AUDIO_BUCKET, MINIO_PDF_BUCKET
-from backend.services.llm_service import load_qwen2_audio_model, extract_and_validate_invoice_data, qwen2_audio_model, qwen2_audio_processor, device
+# Import the llm_service module itself, not its internal global variables directly
+import backend.services.llm_service as llm_service
 from backend.services.pdf_service import generate_invoice_pdf
 from backend.core.utils import check_model_devices
 from backend.services.storage_service import minio_storage_service # Import the MinIO service instance
@@ -34,7 +35,8 @@ async def startup_event():
         # Its __init__ method will ensure buckets exist.
         _ = minio_storage_service
         print("MinIO storage service initialized and buckets ensured.")
-        load_qwen2_audio_model()
+        # Call the loading function within the llm_service module
+        llm_service.load_qwen2_audio_model()
     except Exception as e:
         print(f"CRITICAL ERROR during startup: {e}")
         # Depending on criticality, you might want to exit or log more severely
@@ -51,7 +53,8 @@ async def load_model_endpoint():
     Explicitly loads the Qwen2-Audio model and processor into memory.
     This can be called if the model failed to load at startup or for re-initialization.
     """
-    status_message = load_qwen2_audio_model()
+    # Call the loading function within the llm_service module
+    status_message = llm_service.load_qwen2_audio_model()
     return {"status": status_message}
 
 @app.get("/model_status/", summary="Check Qwen2-Audio Model Device and Memory Status")
@@ -60,7 +63,8 @@ async def get_model_status():
     Provides detailed information about the Qwen2-Audio model's device placement
     and GPU memory usage if running on CUDA.
     """
-    status_message = check_model_devices(qwen2_audio_model, device)
+    # Access the global variables directly from the llm_service module
+    status_message = check_model_devices(llm_service.qwen2_audio_model, llm_service.device)
     return {"status": status_message}
 
 @app.post("/generate_invoice_from_audio/", response_model=dict, summary="Generate Invoice from Audio Input")
@@ -76,7 +80,8 @@ async def generate_invoice_from_audio_endpoint(
     Returns:
         JSONResponse: Contains the extracted InvoiceData and the MinIO object name for the PDF.
     """
-    if qwen2_audio_model is None or qwen2_audio_processor is None:
+    # Check the global variables directly from the llm_service module
+    if llm_service.qwen2_audio_model is None or llm_service.qwen2_audio_processor is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Qwen2-Audio model is not loaded. Please call /load_model/ first."
@@ -102,7 +107,8 @@ async def generate_invoice_from_audio_endpoint(
         print(f"Audio uploaded to MinIO: {MINIO_AUDIO_BUCKET}/{audio_object_name}")
 
         # 3. Process audio with LLM to extract invoice data (LLM service will download from MinIO internally)
-        invoice_data = await extract_and_validate_invoice_data(audio_object_name, transcript_text)
+        # Call the function from the llm_service module
+        invoice_data = await llm_service.extract_and_validate_invoice_data(audio_object_name, transcript_text)
 
         # 4. Generate PDF and upload to MinIO
         pdf_object_name = generate_invoice_pdf(invoice_data)
@@ -229,3 +235,4 @@ async def get_audio(object_name: str):
     except Exception as e:
         print(f"Error getting audio from MinIO: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An error occurred while retrieving the audio: {e}")
+
